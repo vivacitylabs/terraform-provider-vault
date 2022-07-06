@@ -595,7 +595,6 @@ func getDatabaseSchema(typ schema.ValueType) schemaMap {
 						Type:        schema.TypeString,
 						Optional:    false,
 						Description: "Username for connecting to neo4j instance.",
-						Sensitive:   true,
 					},
 					"password": {
 						Type:        schema.TypeString,
