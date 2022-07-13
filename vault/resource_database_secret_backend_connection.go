@@ -559,7 +559,7 @@ func getDatabaseSchema(typ schema.ValueType) schemaMap {
 				Schema: map[string]*schema.Schema{
 					"connection_url": {
 						Type:        schema.TypeString,
-						Optional:    false,
+						Required:    true,
 						Description: "Connection url to neo4j instance (e.g. neo4j://localhost:7687/).",
 					},
 					"max_connection_pool_size": {
@@ -593,12 +593,12 @@ func getDatabaseSchema(typ schema.ValueType) schemaMap {
 					},
 					"username": {
 						Type:        schema.TypeString,
-						Optional:    false,
+						Required:    true,
 						Description: "Username for connecting to neo4j instance.",
 					},
 					"password": {
 						Type:        schema.TypeString,
-						Optional:    false,
+						Required:    true,
 						Description: "Password for connecting to neo4j instance.",
 						Sensitive:   true,
 					},
