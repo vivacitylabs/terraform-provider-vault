@@ -87,6 +87,10 @@ var (
 		name:              "postgresql",
 		defaultPluginName: "postgresql" + dbPluginSuffix,
 	}
+	dbEngineNeo4j = &dbEngine{
+		name:              "neo4j",
+		defaultPluginName: "neo4j" + dbPluginSuffix,
+	}
 	dbEngineOracle = &dbEngine{
 		name:              "oracle",
 		defaultPluginName: "oracle" + dbPluginSuffix,
@@ -114,6 +118,7 @@ var (
 		dbEngineMySQLLegacy,
 		dbEngineMySQLRDS,
 		dbEnginePostgres,
+		dbEngineNeo4j,
 		dbEngineOracle,
 		dbEngineSnowflake,
 		dbEngineRedshift,
@@ -546,6 +551,83 @@ func getDatabaseSchema(typ schema.ValueType) schemaMap {
 			MaxItems:      1,
 			ConflictsWith: util.CalculateConflictsWith(dbEnginePostgres.Name(), dbEngineTypes),
 		},
+		dbEngineNeo4j.name: {
+			Type:        typ,
+			Optional:    true,
+			Description: "Connection parameters for the neo4j-database-plugin plugin.",
+			Elem: &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"connection_url": {
+						Type:        schema.TypeString,
+						Required:    true,
+						Description: "Connection url to neo4j instance (e.g. neo4j://localhost:7687/).",
+					},
+					"max_connection_pool_size": {
+						Type:        schema.TypeInt,
+						Optional:    true,
+						Description: "The maximum number of concurrent connections that can connect to neo4j instance.",
+					},
+					"max_transaction_retry_time": {
+						Type:         schema.TypeString,
+						Optional:     true,
+						Description:  "The maximum amount of time that transaction will be retried for.",
+						ValidateFunc: validateDuration,
+					},
+					"max_connection_lifetime": {
+						Type:         schema.TypeString,
+						Optional:     true,
+						Description:  "The maximum amount of time a connection will be held for.",
+						ValidateFunc: validateDuration,
+					},
+					"connection_acquisition_timeout": {
+						Type:         schema.TypeString,
+						Optional:     true,
+						Description:  "Maximum amount of time that a connection will tried to be acquired.",
+						ValidateFunc: validateDuration,
+					},
+					"socket_connect_timeout": {
+						Type:         schema.TypeString,
+						Optional:     true,
+						Description:  "How long it will try to connect to a socket for.",
+						ValidateFunc: validateDuration,
+					},
+					"username": {
+						Type:        schema.TypeString,
+						Required:    true,
+						Description: "Username for connecting to neo4j instance.",
+					},
+					"password": {
+						Type:        schema.TypeString,
+						Required:    true,
+						Description: "Password for connecting to neo4j instance.",
+						Sensitive:   true,
+					},
+					"root_ca_pem_bundle": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Description: "The root CA to use when verifying TLS connections to the neo4j server.",
+					},
+					"tls_cert_chain_pem": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Description: "The certificates to present to the neo4j server to verify vault as a client.",
+					},
+					"tls_key_pem": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Sensitive:   true,
+						Description: "The private key associated with the tls certs.",
+					},
+					"database_name": {
+						Type:        schema.TypeString,
+						Optional:    true,
+						Description: "The database to connect to on the neo4j instance.",
+					},
+				},
+			},
+			MaxItems:      1,
+			ConflictsWith: util.CalculateConflictsWith(dbEngineNeo4j.Name(), dbEngineTypes),
+		},
 		dbEngineOracle.name: {
 			Type:        typ,
 			Optional:    true,
@@ -829,6 +911,8 @@ func getDatabaseAPIDataForEngine(engine *dbEngine, idx int, d *schema.ResourceDa
 		setDatabaseConnectionDataWithUserPass(d, prefix, data)
 	case dbEnginePostgres:
 		setDatabaseConnectionDataWithDisableEscaping(d, prefix, data)
+	case dbEngineNeo4j:
+		setNeo4jDatabaseConnectionData(d, prefix, data)
 	case dbEngineElasticSearch:
 		setElasticsearchDatabaseConnectionData(d, prefix, data)
 	case dbEngineSnowflake:
@@ -1122,6 +1206,60 @@ func getSnowflakeConnectionDetailsFromResponse(d *schema.ResourceData, prefix st
 	return result
 }
 
+func getNeo4jConnectionDetailsFromResponse(d *schema.ResourceData, prefix string, resp *api.Secret) map[string]interface{} {
+	details := resp.Data["connection_details"]
+	data, ok := details.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	result := getConnectionDetailsFromResponseWithUserPass(d, prefix, resp)
+	if v, ok := data["connection_url"]; ok {
+		result["connection_url"] = v.(string)
+	}
+	if v, ok := data["max_connection_pool_size"]; ok {
+		result["max_connection_pool_size"] = v.(int)
+	}
+
+	if v, ok := data["max_transaction_retry_time"]; ok {
+		result["max_transaction_retry_time"] = v.(string)
+	}
+
+	if v, ok := data["max_connection_lifetime"]; ok {
+		result["max_connection_lifetime"] = v.(string)
+	}
+
+	if v, ok := data["connection_acquisition_timeout"]; ok {
+		result["connection_acquisition_timeout"] = v.(string)
+	}
+
+	if v, ok := data["socket_connect_timeout"]; ok {
+		result["socket_connect_timeout"] = v.(string)
+	}
+
+	if v, ok := data["username"]; ok {
+		data["username"] = v.(string)
+	}
+
+	if v, ok := data["root_ca_pem_bundle"]; ok {
+		result["root_ca_pem_bundle"] = v.(string)
+	}
+
+	if v, ok := data["tls_cert_chain_pem"]; ok {
+		result["tls_cert_chain_pem"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "tls_key_pem"); ok {
+		result["tls_key_pem"] = v.(string)
+	}
+
+	if v, ok := data["database_name"]; ok {
+		result["database_name"] = v.(string)
+	}
+
+	return result
+}
+
 func getConnectionDetailsFromResponseWithUserPass(d *schema.ResourceData, prefix string, resp *api.Secret) map[string]interface{} {
 	result := getConnectionDetailsFromResponse(d, prefix, resp)
 	if result == nil {
@@ -1154,6 +1292,56 @@ func setDatabaseConnectionData(d *schema.ResourceData, prefix string, data map[s
 	}
 	if v, ok := d.GetOkExists(prefix + "username_template"); ok {
 		data["username_template"] = v.(string)
+	}
+}
+
+func setNeo4jDatabaseConnectionData(d *schema.ResourceData, prefix string, data map[string]interface{}) {
+	setDatabaseConnectionDataWithUserPass(d, prefix, data)
+	if v, ok := d.GetOk(prefix + "connection_url"); ok {
+		data["connection_url"] = v.(string)
+	}
+	if v, ok := d.GetOk(prefix + "max_connection_pool_size"); ok {
+		data["max_connection_pool_size"] = v.(int)
+	}
+
+	if v, ok := d.GetOk(prefix + "max_transaction_retry_time"); ok {
+		data["max_transaction_retry_time"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "max_connection_lifetime"); ok {
+		data["max_connection_lifetime"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "connection_acquisition_timeout"); ok {
+		data["connection_acquisition_timeout"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "socket_connect_timeout"); ok {
+		data["socket_connect_timeout"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "username"); ok {
+		data["username"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "password"); ok {
+		data["password"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "root_ca_pem_bundle"); ok {
+		data["root_ca_pem_bundle"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "tls_cert_chain_pem"); ok {
+		data["tls_cert_chain_pem"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "tls_key_pem"); ok {
+		data["tls_key_pem"] = v.(string)
+	}
+
+	if v, ok := d.GetOk(prefix + "database_name"); ok {
+		data["database_name"] = v.(string)
 	}
 }
 
@@ -1550,6 +1738,8 @@ func getDBConnectionConfig(d *schema.ResourceData, engine *dbEngine, idx int,
 		result = getConnectionDetailsFromResponseWithUserPass(d, prefix, resp)
 	case dbEnginePostgres:
 		result = getConnectionDetailsFromResponseWithDisableEscaping(d, prefix, resp)
+	case dbEngineNeo4j:
+		result = getNeo4jConnectionDetailsFromResponse(d, prefix, resp)
 	case dbEngineElasticSearch:
 		result = getElasticsearchConnectionDetailsFromResponse(d, prefix, resp)
 	case dbEngineSnowflake:
