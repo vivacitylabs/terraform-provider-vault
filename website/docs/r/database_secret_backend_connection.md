@@ -26,7 +26,7 @@ resource "vault_mount" "db" {
   type = "database"
 }
 
-resource "vault_database_secret_backend_connection" "postgres" {
+resource "vault_database_secret_backend_connefction" "postgres" {
   backend       = vault_mount.db.path
   name          = "postgres"
   allowed_roles = ["dev", "prod"]
@@ -386,6 +386,32 @@ See the [Vault
 * `disable_escaping` - (Optional) Disable special character escaping in username and password.
 
 * `username_template` - (Optional) - [Template](https://www.vaultproject.io/docs/concepts/username-templating) describing how dynamic usernames are generated.
+
+### Neo4J Configuration Options
+
+* `connection_url` - (Required) Connection url to neo4j instance (e.g. neo4j://localhost:7687/)
+
+* `max_connection_pool_size` - (Optional) The maximum number of concurrent connections that can connect to neo4j instance.
+
+* `max_transaction_retry_time` - (Optional) The maximum amount of time that transaction will be retried for.
+
+* `max_connection_lifetime` - (Optional) The maximum amount of time a connection will be held for.
+
+* `connection_acquisition_timeout` - (Optional) Maximum amount of time that a connection will tried to be acquired..
+
+* `socket_connect_timeout` - (Optional) How long it will try to connect to a socket for.
+
+* `username` - (Required) Username for connecting to neo4j instance.
+
+* `password` - (Required) Password for connecting to neo4j instance.
+
+* `root_ca_pem_bundle` - (Optional) The root CA to use when verifying TLS connections to the neo4j server.
+
+* `tls_cert_chain_pem` - (Optional) The certificates to present to the neo4j server to verify vault as a client.
+
+* `tls_key_pem` - (Optional) The private key associated with the tls certs.
+
+* `database_name` - (Optional) The database to connect to on the neo4j instance.
 
 ## Attributes Reference
 
